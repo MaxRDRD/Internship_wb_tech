@@ -1,0 +1,15 @@
+.git
+.vscode
+*.log
+*.tmp
+
+# Local env
+.env
+
+# Binaries
+/bin/
+/out/
+*.exe
+
+# OS
+.DS_Store
