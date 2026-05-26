@@ -7,6 +7,6 @@ import (
 )
 
 type TopRepository interface {
-	AddEvent(ctx context.Context, event domain.SearchEvent) error
-	GetTopN(ctx context.Context, n int) ([]domain.TopItem, error)
+	AddEvent(ctx context.Context, event domain.SearchEvent) error // Добавление события
+	GetTopN(ctx context.Context, n int) ([]domain.TopItem, error) // Получение топа
 }

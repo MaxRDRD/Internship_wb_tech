@@ -11,14 +11,19 @@ Payload (JSON):
 ```json
 {
   "query": "iphone 15",
+  "session_id": "s-123",
+  "user_id": "u-456",
   "occurred_at": "2026-05-24T12:34:56.789Z"
 }
 ```
 - `query` (string, required) — нормализованный поисковый запрос.
+- `session_id` (string, optional) — идентификатор сессии для анти-спам фильтра.
+- `user_id` (string, optional) — идентификатор пользователя для анти-спам фильтра.
 - `occurred_at` (string, optional, RFC3339Nano) — время запроса. Если отсутствует, используется время приема.
 
 ### Почему нужны именно эти поля
 - `query` — ключ для агрегирования и расчета Top-N.
+- `session_id` / `user_id` — позволяют ограничить аномальные всплески от одной сессии.
 - `occurred_at` — нужен для корректного попадания запроса в окно последних 5 минут при задержках доставки.
 
 ## API
@@ -56,9 +61,29 @@ curl "http://localhost:8081/top?n=5"
 curl -X POST "http://localhost:8081/stoplist" -H "Content-Type: application/json" -d '{"query":"iphone 15"}'
 ```
 
+Для Windows `cmd.exe` используйте двойные кавычки внутри `-d`:
+```bat
+curl -X POST "http://localhost:8081/stoplist" -H "Content-Type: application/json" -d "{\"query\":\"iphone 15\"}"
+```
+
+Для PowerShell лучше явно вызывать `curl.exe`:
+```powershell
+curl.exe -X POST "http://localhost:8081/stoplist" -H "Content-Type: application/json" -d '{"query":"iphone 15"}'
+```
+
 Удалить запрос из стоп-листа:
 ```bash
 curl -X DELETE "http://localhost:8081/stoplist" -H "Content-Type: application/json" -d '{"query":"iphone 15"}'
+```
+
+Для Windows `cmd.exe`:
+```bat
+curl -X DELETE "http://localhost:8081/stoplist" -H "Content-Type: application/json" -d "{\"query\":\"iphone 15\"}"
+```
+
+Для PowerShell:
+```powershell
+curl.exe -X DELETE "http://localhost:8081/stoplist" -H "Content-Type: application/json" -d '{"query":"iphone 15"}'
 ```
 
 Посмотреть стоп-лист:
@@ -74,6 +99,8 @@ docker compose up -d
 ```
 2. Приложение будет доступно на `http://localhost:8081`.
 
+3. Kafka UI будет доступна на `http://localhost:8080`.
+
 ### Вариант B: подключение к существующей Kafka
 1. Скопируйте `.env.example` в `.env`.
 2. Укажите `KAFKA_BROKERS`, `KAFKA_TOPIC`, `KAFKA_GROUP`.
@@ -81,6 +108,8 @@ docker compose up -d
 ```bash
 go run ./cmd/topq
 ```
+
+Адрес API при запуске через `go run` берется из `HTTP_ADDR` в `.env`.
 
 ## Как подключить Kafka к этому проекту
 Сервис читает события через consumer group `KAFKA_GROUP` из топика `KAFKA_TOPIC`.
@@ -96,13 +125,14 @@ KAFKA_GROUP=topq
 - Сервис-производитель должен писать JSON в топик `search.events`.
 - Поле `query` обязательно.
 - `occurred_at` лучше передавать в RFC3339Nano, но если его нет, сервис возьмет время приема.
-- Для первой версии достаточно обычного plaintext Kafka без SASL/SSL, если все крутится локально или внутри доверенной сети.
 - Если запускаете Kafka через `docker-compose` из этого репозитория, клиентам с хоста нужен `localhost:29092`, а сервисам внутри compose-сети нужен `kafka:9092`.
 
 Пример сообщения:
 ```json
 {
   "query": "iphone 15",
+  "session_id": "s-123",
+  "user_id": "u-456",
   "occurred_at": "2026-05-24T12:34:56.789Z"
 }
 ```
@@ -125,6 +155,7 @@ KAFKA_GROUP=topq
 - Хранилище MVP — in-memory, окно 5 минут, точность 1 секунда.
 - Запросы на чтение допускают нагрузку больше, чем поток событий.
 - Стоп-лист применяется при записи событий и при чтении топа (динамический фильтр без перезапуска).
+- Встроен простой анти-спам: не более 10 событий в минуту на одну сессию или пользователя.
 
 ## Trade-offs и бизнес-логика
 - Источник времени: используем `occurred_at`, иначе время приема.
@@ -133,7 +164,7 @@ KAFKA_GROUP=topq
 - Опциональные фичи (stop-list, unit-тесты) реализованы; метрики и нагрузочное тестирование можно добавить поверх текущей архитектуры.
 
 ## Проблемы постановки и как они решены
-- Не задан формат payload: определен контракт с `query` и `occurred_at`.
+- Не задан формат payload: определен контракт с `query`, `session_id`, `user_id` и `occurred_at`.
 - Не задана политика очистки: реализовано скользящее окно по секундам на 5 минут.
 - Не задан источник времени: приоритет у `occurred_at`, иначе время приема.
 

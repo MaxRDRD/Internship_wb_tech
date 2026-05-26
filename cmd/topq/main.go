@@ -8,30 +8,34 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
-
 	"topq/internal/adapters/http"
 	"topq/internal/adapters/kafka"
 	"topq/internal/adapters/memory"
 	"topq/internal/config"
 	"topq/internal/usecase"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load .env file into environment (if present) so developers can run
-	// `go run ./cmd/topq` without exporting env vars manually.
+	// Загружаем файл .env в переменные окружения (если он присутствует)
+	// чтобы не экспортировать переменные вручную в среде выполнения
 	_ = godotenv.Load()
 
+	// загружаем конфиг
 	cfg := config.Load()
 
+	//инициализируем repo и usecase
 	repo := memory.NewSlidingWindowRepo(cfg.WindowSeconds)
 	stopRepo := memory.NewStopListRepo()
 	stopList := usecase.NewStopList(stopRepo)
-	ingest := usecase.NewIngest(repo, stopRepo)
+	antiSpam := usecase.NewAntiSpam(10, time.Minute)
+	ingest := usecase.NewIngest(repo, stopRepo, antiSpam)
 	top := usecase.NewTop(repo, stopRepo)
 
+	// запускаем http сервер и kafka consumer
 	server := http.NewServer(cfg.HTTPAddr, top, stopList, cfg.DefaultTopN, cfg.WindowSeconds)
-
+	// осуществляем graceful shutdown при получении сигнала завершения
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

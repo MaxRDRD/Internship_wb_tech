@@ -13,29 +13,34 @@ import (
 const maxTopN = 1000
 
 type Handler struct {
-	top          *usecase.Top
-	stopListUC   *usecase.StopList
-	defaultTopN  int
-	windowSecond int
+	top          *usecase.Top      // usecase для получения топа
+	stopListUC   *usecase.StopList // usecase для управления стоп-листом (добавление/удаление слов)
+	defaultTopN  int               // значение n по умолчанию для топа, если не указано в запросе
+	windowSecond int               // размер окна в секундах, для которого считается топ (для информации в ответе)
 }
 
+// Создание ручки
 func NewHandler(top *usecase.Top, stopList *usecase.StopList, defaultTopN int, windowSecond int) *Handler {
 	return &Handler{top: top, stopListUC: stopList, defaultTopN: defaultTopN, windowSecond: windowSecond}
 }
 
+// Регистрация маршрутов и их обработчиков
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/health", h.health)
 	mux.HandleFunc("/top", h.getTop)
 	mux.HandleFunc("/stoplist", h.handleStopList)
 }
 
+// Проверка работоспособности сервера
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
 }
 
+// Получение топа. Параметр n может быть передан в query, если не передан - используется defaultTopN
 func (h *Handler) getTop(w http.ResponseWriter, r *http.Request) {
 	n := h.defaultTopN
+	// Если в query есть параметр n, пытаемся его распарсить и использовать вместо defaultTopN
 	if v := r.URL.Query().Get("n"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			n = parsed
@@ -63,18 +68,21 @@ func (h *Handler) getTop(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// Структура для ответа на запрос топа
 type topResponse struct {
 	WindowSeconds int              `json:"window_seconds"`
 	GeneratedAt   string           `json:"generated_at"`
 	Items         []domain.TopItem `json:"items"`
 }
 
+// Хелпер функция для записи JSON ответа
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
+// Хелпер функция для записи JSON ошибки
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }

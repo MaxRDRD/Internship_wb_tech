@@ -8,26 +8,27 @@ import (
 )
 
 const (
-	defaultHTTPAddr     = ":8080"
-	defaultWindowSec    = 300
-	defaultTopN         = 10
-	defaultKafkaGroupID = "topq"
+	defaultHTTPAddr     = ":8080" // стандартный порт для kafka ui
+	defaultWindowSec    = 300     // стаднартный размер скользящего окна
+	defaultTopN         = 10      //стандартное количество интерсующих запросов в топе
+	defaultKafkaGroupID = "topq"  // стандартный ID группы kafka
 )
 
 type Config struct {
-	HTTPAddr        string
-	WindowSeconds   int
-	DefaultTopN     int
-	ConsumerEnabled bool
+	HTTPAddr        string // порт
+	WindowSeconds   int    // размер скользящего окна
+	DefaultTopN     int    //количество интерсующих запросов в топе
+	ConsumerEnabled bool   // Флаг, указывающий, нужно ли запускать Kafka Consumer
 
-	KafkaBrokers []string
-	KafkaTopic   string
-	KafkaGroupID string
+	KafkaBrokers []string // Список брокеров Kafka
+	KafkaTopic   string   // Топик Kafka для чтения данных
+	KafkaGroupID string   // ID группы Kafka Consumer
 }
 
+// Загрузка конфига
 func Load() Config {
 	cfg := Config{}
-
+	// Читаем конфигурацию из переменных окружения с дефолтными значениями
 	cfg.HTTPAddr = getenvDefault("HTTP_ADDR", defaultHTTPAddr)
 	cfg.WindowSeconds = getenvIntDefault("WINDOW_SECONDS", defaultWindowSec)
 	cfg.DefaultTopN = getenvIntDefault("DEFAULT_TOP_N", defaultTopN)
@@ -49,6 +50,7 @@ func Load() Config {
 	return cfg
 }
 
+// хелпер функции для получение данных из переменных окружения
 func getenvDefault(key, def string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v

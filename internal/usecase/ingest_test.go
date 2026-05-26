@@ -13,7 +13,7 @@ func TestIngestRespectsStopList(t *testing.T) {
 	topRepo := memory.NewSlidingWindowRepo(300)
 	stopRepo := memory.NewStopListRepo()
 	stop := NewStopList(stopRepo)
-	ingest := NewIngest(topRepo, stopRepo)
+	ingest := NewIngest(topRepo, stopRepo, nil)
 
 	ctx := context.Background()
 

@@ -15,15 +15,18 @@ import (
 )
 
 type Consumer struct {
-	reader *kafkago.Reader
-	ingest *usecase.Ingest
+	reader *kafkago.Reader // Kafka reader для чтения сообщений из топика
+	ingest *usecase.Ingest // usecase для обработки событий и их сохранения в репозитории
 }
 
 type eventPayload struct {
-	Query      string `json:"query"`
-	OccurredAt string `json:"occurred_at"`
+	Query      string `json:"query"`       // поисковый запрос
+	SessionID  string `json:"session_id"`  // идентификатор сессии, может быть пустым
+	UserID     string `json:"user_id"`     // идентификатор пользователя, может быть пустым
+	OccurredAt string `json:"occurred_at"` // время события в формате RFC3339Nano, может быть пустым (тогда будет использовано время обработки)
 }
 
+// Создание нового Kafka consumer
 func NewConsumer(cfg config.Config, ingest *usecase.Ingest) *Consumer {
 	reader := kafkago.NewReader(kafkago.ReaderConfig{
 		Brokers:     cfg.KafkaBrokers,
@@ -37,6 +40,7 @@ func NewConsumer(cfg config.Config, ingest *usecase.Ingest) *Consumer {
 	return &Consumer{reader: reader, ingest: ingest}
 }
 
+// Запуск Kafka consumer
 func (c *Consumer) Run(ctx context.Context) error {
 	defer func() {
 		if err := c.reader.Close(); err != nil {
@@ -44,6 +48,7 @@ func (c *Consumer) Run(ctx context.Context) error {
 		}
 	}()
 
+	// Бесконечный цикл для чтения сообщений из Kafka
 	for {
 		msg, err := c.reader.FetchMessage(ctx)
 		if err != nil {
@@ -52,7 +57,7 @@ func (c *Consumer) Run(ctx context.Context) error {
 			}
 			return err
 		}
-
+		// Декодируем сообщение в структуру события
 		event, ok := decodeEvent(msg.Value)
 		if !ok {
 			_ = c.reader.CommitMessages(ctx, msg)
@@ -70,18 +75,22 @@ func (c *Consumer) Run(ctx context.Context) error {
 	}
 }
 
+// Декодирование данных из Kafka в структуру SearchEvent
 func decodeEvent(data []byte) (domain.SearchEvent, bool) {
 	var payload eventPayload
 	if err := json.Unmarshal(data, &payload); err != nil {
 		log.Printf("event decode error: %v", err)
 		return domain.SearchEvent{}, false
 	}
-
+	// получение запроса из payload
 	query := strings.TrimSpace(payload.Query)
 	if query == "" {
 		return domain.SearchEvent{}, false
 	}
-
+	// получение sessionID и userID из payload
+	sessionID := strings.TrimSpace(payload.SessionID)
+	userID := strings.TrimSpace(payload.UserID)
+	// получение времени события из payload
 	occurredAt := time.Now().UTC()
 	if payload.OccurredAt != "" {
 		parsed, err := time.Parse(time.RFC3339Nano, payload.OccurredAt)
@@ -90,5 +99,5 @@ func decodeEvent(data []byte) (domain.SearchEvent, bool) {
 		}
 	}
 
-	return domain.SearchEvent{Query: query, OccurredAt: occurredAt}, true
+	return domain.SearchEvent{Query: query, SessionID: sessionID, UserID: userID, OccurredAt: occurredAt}, true
 }
